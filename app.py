@@ -536,11 +536,267 @@ with data_tab3:
             use_container_width=True
         )
 
+# --- SECTION 4: ADVANCED INSIGHTS ---
+st.header("IV. Advanced Insights & Recommendations")
+
+insights_tab1, insights_tab2, insights_tab3 = st.tabs(["🎯 Recommendations", "📈 Efficiency Analysis", "🔬 Deep Dive"])
+
+with insights_tab1:
+    st.subheader("Model Recommendations by Use Case")
+    
+    with st.expander("ℹ️ How recommendations work"):
+        st.markdown("""
+        Based on your current weight settings and filters, we provide tailored recommendations for different scenarios:
+        - **Best Overall**: Highest composite score
+        - **Most Efficient**: Best quality-to-resource ratio
+        - **Greenest**: Lowest environmental impact while maintaining quality
+        - **Budget-Friendly**: Lowest cost with acceptable quality
+        """)
+    
+    rec_col1, rec_col2 = st.columns(2)
+    
+    with rec_col1:
+        st.markdown("### 🏆 Top 3 Overall (Composite Score)")
+        top_3 = ms.head(3)
+        for idx, (_, row) in enumerate(top_3.iterrows(), 1):
+            with st.container():
+                st.markdown(f"""
+                **#{idx} - {row['Model']}** ({row['Type']})
+                - Composite Score: `{row['Composite']:.3f}`
+                - Quality: {row['Quality_mean']:.2f}/5
+                - CO2: {row['CO2_mean']:.1f}g | Cost: {row['Cost_mean']:.3f}Wh | Latency: {row['Latency_mean']:.2f}s
+                """)
+                st.progress(float(row['Composite']))
+                st.markdown("---")
+    
+    with rec_col2:
+        st.markdown("### 🌱 Most Eco-Friendly (Quality ≥ 3.0)")
+        eco_models = model_stats[model_stats['Quality_mean'] >= 3.0].sort_values('CO2_mean')
+        for idx, (_, row) in enumerate(eco_models.head(3).iterrows(), 1):
+            with st.container():
+                st.markdown(f"""
+                **#{idx} - {row['Model']}** ({row['Type']})
+                - CO2: `{row['CO2_mean']:.1f}g` (Lowest in class)
+                - Quality: {row['Quality_mean']:.2f}/5
+                - Cost: {row['Cost_mean']:.3f}Wh | Latency: {row['Latency_mean']:.2f}s
+                """)
+                eco_score = 1 - (row['CO2_mean'] / model_stats['CO2_mean'].max())
+                st.progress(float(eco_score))
+                st.markdown("---")
+    
+    st.markdown("### 💰 Best Value Models (Quality per Cost)")
+    model_stats['Value_Score'] = model_stats['Quality_mean'] / (model_stats['Cost_mean'] + 1e-9)
+    value_models = model_stats.sort_values('Value_Score', ascending=False).head(5)
+    
+    fig_value = px.bar(
+        value_models, x='Model', y='Value_Score', color='Type',
+        title='Quality per Cost Unit (Higher = Better Value)',
+        labels={'Value_Score': 'Quality/Cost Ratio'}
+    )
+    st.plotly_chart(fig_value, use_container_width=True)
+
+with insights_tab2:
+    st.subheader("Efficiency Analysis")
+    
+    # Quality-Efficiency Matrix
+    st.markdown("### 📊 Quality-Efficiency Matrix")
+    with st.expander("ℹ️ Understanding the matrix"):
+        st.markdown("""
+        This quadrant chart helps identify:
+        - **Top-right**: High quality, high efficiency (⭐ Best choice)
+        - **Top-left**: High quality, low efficiency (🔥 Premium models)
+        - **Bottom-right**: Low quality, high efficiency (💡 Basic tasks only)
+        - **Bottom-left**: Low quality, low efficiency (❌ Avoid)
+        """)
+    
+    # Calculate efficiency score (inverse of cost + CO2)
+    model_stats['Efficiency_Score'] = 1 / ((model_stats['Cost_mean'] + model_stats['CO2_mean']/1000) + 1e-9)
+    
+    quality_median = model_stats['Quality_mean'].median()
+    efficiency_median = model_stats['Efficiency_Score'].median()
+    
+    fig_matrix = px.scatter(
+        model_stats, x='Efficiency_Score', y='Quality_mean',
+        size='Latency_mean', color='Type', text='Model',
+        title='Quality-Efficiency Matrix',
+        labels={'Efficiency_Score': 'Efficiency Score →', 'Quality_mean': 'Quality →'}
+    )
+    
+    # Add quadrant lines
+    fig_matrix.add_hline(y=quality_median, line_dash="dash", line_color="gray", opacity=0.5)
+    fig_matrix.add_vline(x=efficiency_median, line_dash="dash", line_color="gray", opacity=0.5)
+    
+    # Add annotations
+    fig_matrix.add_annotation(x=efficiency_median*1.5, y=model_stats['Quality_mean'].max()*0.95,
+                             text="⭐ Best Zone", showarrow=False, font=dict(size=14, color="green"))
+    
+    fig_matrix.update_traces(textposition='top center')
+    st.plotly_chart(fig_matrix, use_container_width=True)
+    
+    # Efficiency Rankings
+    eff_col1, eff_col2 = st.columns(2)
+    
+    with eff_col1:
+        st.markdown("### ⚡ Most Efficient Models")
+        top_efficient = model_stats.nlargest(5, 'Efficiency_Score')[['Model', 'Type', 'Quality_mean', 'Efficiency_Score']]
+        top_efficient.columns = ['Model', 'Type', 'Quality', 'Efficiency']
+        st.dataframe(
+            top_efficient.style.format({'Quality': '{:.2f}', 'Efficiency': '{:.2f}'}).background_gradient(subset=['Efficiency'], cmap='Greens'),
+            use_container_width=True
+        )
+    
+    with eff_col2:
+        st.markdown("### 🐌 Least Efficient Models")
+        least_efficient = model_stats.nsmallest(5, 'Efficiency_Score')[['Model', 'Type', 'Quality_mean', 'Efficiency_Score']]
+        least_efficient.columns = ['Model', 'Type', 'Quality', 'Efficiency']
+        st.dataframe(
+            least_efficient.style.format({'Quality': '{:.2f}', 'Efficiency': '{:.2f}'}).background_gradient(subset=['Efficiency'], cmap='Reds_r'),
+            use_container_width=True
+        )
+
+with insights_tab3:
+    st.subheader("Deep Dive Analysis")
+    
+    # Model selection for deep dive
+    selected_model = st.selectbox("Select a model for detailed analysis:", df_filtered['Model'].unique())
+    
+    if selected_model:
+        model_data = df_filtered[df_filtered['Model'] == selected_model]
+        model_agg = model_stats[model_stats['Model'] == selected_model].iloc[0]
+        
+        # Model Overview Card
+        st.markdown(f"### 🔍 {selected_model} - Detailed Profile")
+        
+        overview_col1, overview_col2, overview_col3, overview_col4 = st.columns(4)
+        overview_col1.metric("Type", model_agg['Type'])
+        overview_col2.metric("Avg Quality", f"{model_agg['Quality_mean']:.2f}", f"±{model_agg['Quality_std']:.2f}")
+        overview_col3.metric("Samples", int(model_agg['Count']))
+        
+        # Calculate rank
+        rank = ms[ms['Model'] == selected_model].index[0] + 1 if selected_model in ms['Model'].values else "N/A"
+        overview_col4.metric("Overall Rank", f"#{rank}")
+        
+        st.markdown("---")
+        
+        # Performance across prompts
+        deep_col1, deep_col2 = st.columns(2)
+        
+        with deep_col1:
+            st.markdown("#### Performance by Prompt")
+            fig_prompt_perf = px.scatter(
+                model_data, x='Prompt', y='Quality', size='CO2_Emission_g',
+                color='Prompt_Type', title=f'{selected_model} - Quality by Prompt',
+                labels={'Quality': 'Quality Score'}
+            )
+            fig_prompt_perf.add_hline(y=model_data['Quality'].mean(), line_dash="dash", 
+                                     annotation_text=f"Avg: {model_data['Quality'].mean():.2f}")
+            st.plotly_chart(fig_prompt_perf, use_container_width=True)
+            
+            st.markdown("#### Cost Distribution")
+            fig_cost_dist = px.histogram(
+                model_data, x='Cost', nbins=20,
+                title=f'{selected_model} - Cost Distribution',
+                labels={'Cost': 'Cost (Wh)'}
+            )
+            st.plotly_chart(fig_cost_dist, use_container_width=True)
+        
+        with deep_col2:
+            st.markdown("#### Metric Breakdown by Category")
+            category_breakdown = model_data.groupby('Prompt_Type').agg({
+                'Quality': 'mean',
+                'CO2_Emission_g': 'mean',
+                'Cost': 'mean',
+                'Latency_s': 'mean'
+            }).reset_index()
+            
+            fig_category = px.bar(
+                category_breakdown, x='Prompt_Type', y='Quality',
+                title=f'{selected_model} - Quality by Category',
+                labels={'Quality': 'Avg Quality', 'Prompt_Type': 'Task Category'}
+            )
+            st.plotly_chart(fig_category, use_container_width=True)
+            
+            st.markdown("#### Performance Metrics")
+            metrics_data = pd.DataFrame({
+                'Metric': ['Quality', 'CO2', 'Cost', 'Latency'],
+                'Value': [model_agg['Quality_mean'], model_agg['CO2_mean'], 
+                         model_agg['Cost_mean'], model_agg['Latency_mean']],
+                'Std': [model_agg['Quality_std'], model_agg['CO2_std'],
+                       model_agg['Cost_std'], model_agg['Latency_std']]
+            })
+            
+            fig_metrics = go.Figure()
+            fig_metrics.add_trace(go.Bar(
+                x=metrics_data['Metric'],
+                y=metrics_data['Value'],
+                error_y=dict(type='data', array=metrics_data['Std']),
+                marker_color=['#2ecc71', '#e74c3c', '#f39c12', '#3498db']
+            ))
+            fig_metrics.update_layout(title=f'{selected_model} - Metrics with Std Dev',
+                                     yaxis_title='Value')
+            st.plotly_chart(fig_metrics, use_container_width=True)
+        
+        # Strengths and Weaknesses
+        st.markdown("#### 📊 Strengths & Weaknesses Analysis")
+        
+        strengths_col, weaknesses_col = st.columns(2)
+        
+        with strengths_col:
+            st.success("**Strengths:**")
+            
+            # Quality rank
+            quality_rank = model_stats.sort_values('Quality_mean', ascending=False)['Model'].tolist().index(selected_model) + 1
+            if quality_rank <= 3:
+                st.write(f"✅ Top {quality_rank} in Quality")
+            
+            # CO2 rank
+            co2_rank = model_stats.sort_values('CO2_mean')['Model'].tolist().index(selected_model) + 1
+            if co2_rank <= 3:
+                st.write(f"✅ Top {co2_rank} in Low CO2 Emissions")
+            
+            # Cost rank
+            cost_rank = model_stats.sort_values('Cost_mean')['Model'].tolist().index(selected_model) + 1
+            if cost_rank <= 3:
+                st.write(f"✅ Top {cost_rank} in Low Cost")
+            
+            # Latency rank
+            latency_rank = model_stats.sort_values('Latency_mean')['Model'].tolist().index(selected_model) + 1
+            if latency_rank <= 3:
+                st.write(f"✅ Top {latency_rank} in Speed")
+            
+            # Best category
+            if 'Prompt_Type' in model_data.columns:
+                best_category = model_data.groupby('Prompt_Type')['Quality'].mean().idxmax()
+                st.write(f"✅ Excels at: {best_category}")
+        
+        with weaknesses_col:
+            st.warning("**Areas for Improvement:**")
+            
+            total_models = len(model_stats)
+            
+            if quality_rank > total_models * 0.6:
+                st.write(f"⚠️ Below average Quality (rank {quality_rank}/{total_models})")
+            
+            if co2_rank > total_models * 0.6:
+                st.write(f"⚠️ Higher CO2 emissions (rank {co2_rank}/{total_models})")
+            
+            if cost_rank > total_models * 0.6:
+                st.write(f"⚠️ Higher cost (rank {cost_rank}/{total_models})")
+            
+            if latency_rank > total_models * 0.6:
+                st.write(f"⚠️ Slower response time (rank {latency_rank}/{total_models})")
+            
+            # Worst category
+            if 'Prompt_Type' in model_data.columns:
+                worst_category = model_data.groupby('Prompt_Type')['Quality'].mean().idxmin()
+                st.write(f"⚠️ Needs improvement: {worst_category}")
+
 # --- Footer ---
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: gray; font-size: 0.9em;'>
     <p>📊 AI Model Performance Dashboard | Built with Streamlit & Plotly</p>
     <p>💡 Tip: Adjust weights in the sidebar to customize the composite score for your priorities</p>
+    <p>🔍 Use the Deep Dive tab to analyze individual model performance in detail</p>
 </div>
 """, unsafe_allow_html=True)
