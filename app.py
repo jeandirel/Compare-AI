@@ -409,7 +409,7 @@ def load_data(file_path):
         return pd.DataFrame()
 
 # Load the data
-df = load_data('FComparIA_Benchmark_LongFormat.xlsx')
+df = load_data('FinalComparIA_Benchmark_LongFormat.xlsx')
 
 if df.empty:
     st.stop()
@@ -582,4 +582,5 @@ with tab1:
 with tab2:
     st.subheader("Filtered Raw Data")
     st.dataframe(df_filtered)
+
 
