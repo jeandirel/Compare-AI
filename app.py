@@ -250,6 +250,17 @@ with st.expander("ℹ️ How to interpret", expanded=False):
 
 display_composite = ms[['Model', 'Type', 'Quality_mean', 'CO2_mean', 'Cost_mean', 'Latency_mean', 'Composite']].head(10)
 display_composite.columns = ['Model', 'Type', 'Quality', 'CO2 (g)', 'Cost (Wh)', 'Latency (s)', 'Score']
+
+# Color coding without matplotlib dependency
+def color_score(val):
+    if val >= 0.7:
+        color = '#90EE90'  # Light green
+    elif val >= 0.5:
+        color = '#FFFFE0'  # Light yellow
+    else:
+        color = '#FFB6C1'  # Light pink
+    return f'background-color: {color}'
+
 st.dataframe(
     display_composite.style.format({
         'Quality': '{:.2f}',
@@ -257,7 +268,7 @@ st.dataframe(
         'Cost (Wh)': '{:.3f}',
         'Latency (s)': '{:.2f}',
         'Score': '{:.3f}'
-    }).background_gradient(subset=['Score'], cmap='RdYlGn'),
+    }).applymap(color_score, subset=['Score']),
     use_container_width=True
 )
 
@@ -640,8 +651,14 @@ with insights_tab2:
         st.markdown("### ⚡ Most Efficient Models")
         top_efficient = model_stats.nlargest(5, 'Efficiency_Score')[['Model', 'Type', 'Quality_mean', 'Efficiency_Score']]
         top_efficient.columns = ['Model', 'Type', 'Quality', 'Efficiency']
+        
+        def color_efficiency_high(val):
+            normalized = (val - top_efficient['Efficiency'].min()) / (top_efficient['Efficiency'].max() - top_efficient['Efficiency'].min() + 1e-9)
+            green_intensity = int(255 * (1 - normalized * 0.5))
+            return f'background-color: rgb({green_intensity}, 255, {green_intensity})'
+        
         st.dataframe(
-            top_efficient.style.format({'Quality': '{:.2f}', 'Efficiency': '{:.2f}'}).background_gradient(subset=['Efficiency'], cmap='Greens'),
+            top_efficient.style.format({'Quality': '{:.2f}', 'Efficiency': '{:.2f}'}).applymap(color_efficiency_high, subset=['Efficiency']),
             use_container_width=True
         )
     
@@ -649,8 +666,14 @@ with insights_tab2:
         st.markdown("### 🐌 Least Efficient Models")
         least_efficient = model_stats.nsmallest(5, 'Efficiency_Score')[['Model', 'Type', 'Quality_mean', 'Efficiency_Score']]
         least_efficient.columns = ['Model', 'Type', 'Quality', 'Efficiency']
+        
+        def color_efficiency_low(val):
+            normalized = (val - least_efficient['Efficiency'].min()) / (least_efficient['Efficiency'].max() - least_efficient['Efficiency'].min() + 1e-9)
+            red_intensity = int(255 * (1 - normalized))
+            return f'background-color: rgb(255, {red_intensity}, {red_intensity})'
+        
         st.dataframe(
-            least_efficient.style.format({'Quality': '{:.2f}', 'Efficiency': '{:.2f}'}).background_gradient(subset=['Efficiency'], cmap='Reds_r'),
+            least_efficient.style.format({'Quality': '{:.2f}', 'Efficiency': '{:.2f}'}).applymap(color_efficiency_low, subset=['Efficiency']),
             use_container_width=True
         )
 
