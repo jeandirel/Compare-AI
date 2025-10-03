@@ -291,7 +291,7 @@ with col1:
     fig_quality_co2 = px.scatter(
         df_filtered, x="CO2_Emission_g", y="Quality", color="Model", symbol="Type", size="Cost",
         hover_name="Model", hover_data={'Prompt': True, 'Cost': ':.2f', 'Latency_s': ':.2f'},
-        title="Quality vs. CO2 Emission",
+        title="Quality vs. Energy",
         log_x=use_log_scale
     )
     fig_quality_co2.update_layout(
@@ -823,3 +823,4 @@ st.markdown("""
     <p>🔍 Use the Deep Dive tab to analyze individual model performance in detail</p>
 </div>
 """, unsafe_allow_html=True)
+
